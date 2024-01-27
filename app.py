@@ -1,62 +1,77 @@
 import gradio as gr
 
-from langchain_community.vectorstores import faiss
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.document_loaders import text
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from llms.tiny_llama import TinyLlama
+from knowledgebase import KnowledgeBase
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
 
 
-from core import LLM
+LLM = None
+KNOWLEDGEBASE = KnowledgeBase()
 
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-llm = LLM()
+# MEMORY = ConversationBufferMemory(
+#     memory_key="chat_history", output_key="answer", return_messages=True
+# )
+QA_CHAIN = None
 
 
-def infer(system_prompt, user_prompt, file_input):
-    loader = text.TextLoader(file_path=file_input)
-    documents = loader.load()
-    text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0)
-    splitted_docs = text_splitter.split_documents(documents=documents)
-    db = faiss.FAISS.from_documents(embedding=embeddings, documents=splitted_docs)
-    retriever = db.as_retriever()
-    context = retriever.invoke(user_prompt)[0].page_content
+# def init_qa_chain():
+#     QA_CHAIN = ConversationalRetrievalChain.from_llm(
+#         LLM,
+#         retriever=KNOWLEDGEBASE,
+#         chain_type="stuff",
+#         memory=MEMORY,
+#         return_source_documents=True,
+#         verbose=True,
+#     )
 
-    system = {"role": "system", "content": system_prompt}
-    user = {
-        "role": "user",
-        "content": f"prompt: ```{user_prompt}``\ncontext:```{context}```",
-    }
-    # print(system, user)
-    response = llm([system, user]).split("<|assistant|>")[-1]
-    return response
+
+def init_llm(llm="TinyLlama"):
+    LLM = TinyLlama()
+
+
+def echo(message, history):
+    return message
+
+
+def load_knowledgebase(path):
+    print("docu:", path)
+    if not path:
+        return
+    if "https://" in path:
+        KNOWLEDGEBASE.load_url(path)
+        print("Succesfully loaded URL")
+    else:
+        if path.split(".")[-1] == "pdf":
+            KNOWLEDGEBASE.load_pdf(path)
+            print("Succesfully loaded PDF")
+        else:
+            KNOWLEDGEBASE.load_txt(path)
+            print("Succesfully loaded TXT")
 
 
 with gr.Blocks() as iface:
-    with gr.Row():
+    with gr.Row(equal_height=True):
         with gr.Column():
             system_prompt = gr.Textbox(
                 label="System prompt",
-                lines=4,
-                value="You are an assistant. Answer to a user's query based on a given context.",
+                placeholder="You are an assistant. Answer to a user's query based on a given context.",
             )
-            user_prompt = gr.Textbox(label="User prompt", lines=4)
-            file_input = gr.File(
-                label="Enter you .txt document.", file_types=["text"], type="filepath"
-            )
+            with gr.Accordion(label="Knowledge base", open=True):
+                url_input = gr.Textbox(
+                    placeholder="URL",
+                )
+                gr.Markdown("OR")
+                file_input = gr.File(
+                    file_count="multiple",
+                    file_types=[".txt", ".pdf"],
+                    interactive=True,
+                )
+                file_input.upload(load_knowledgebase(path=file_input.value))
             submit = gr.Button("Submit")
         with gr.Column():
-            text_output = gr.TextArea(lines=26, label="Response")
-
-        submit.click(
-            infer,
-            inputs=[
-                system_prompt,
-                user_prompt,
-                file_input,
-            ],
-            outputs=[text_output],
-        )
-
+            demo = gr.ChatInterface(fn=echo, examples=["Namaste!", "Hello!", "Hola!"])
 
 if __name__ == "__main__":
-    iface.launch(share=True)
+    # init_llm()
+    iface.launch(debug=True)

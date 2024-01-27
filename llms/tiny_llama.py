@@ -1,10 +1,9 @@
-from typing import Any
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
-class LLM:
-    def __init__(self, device="cpu") -> None:
+class TinyLlama:
+    def __init__(self) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(
             "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
         )
@@ -19,7 +18,7 @@ class LLM:
 
         self._messages = []
 
-    def __call__(self, messages, *args: Any, **kwds: Any) -> Any:
+    def __call__(self, messages, *args, **kwds):
         tokenized_chat = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
